@@ -19,32 +19,18 @@ func Notify(fresh []Action) {
 		title = fmt.Sprintf("%s %s · %s#%d", kindIcon[a.Kind], a.Kind, shortRepo(a.Repo), a.Number)
 		body = a.Title
 	} else {
-		title = fmt.Sprintf("🪿 %d PRs need you", len(fresh))
+		title = fmt.Sprintf("%d PRs need you", len(fresh))
 		var lines []string
 		for _, a := range fresh[:min(3, len(fresh))] {
-			lines = append(lines, fmt.Sprintf("%s %s#%d", a.Kind, shortRepo(a.Repo), a.Number))
+			lines = append(lines, fmt.Sprintf("%s %s · %s#%d", kindIcon[a.Kind], a.Kind, shortRepo(a.Repo), a.Number))
+		}
+		if len(fresh) > 3 {
+			lines = append(lines, fmt.Sprintf("and %d more", len(fresh)-3))
 		}
 		body = strings.Join(lines, "\n")
 	}
-
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		// PR titles come from other people, so pass them as arguments and
-		// never paste them into the AppleScript source.
-		cmd = exec.Command("osascript",
-			"-e", "on run argv",
-			"-e", "display notification (item 2 of argv) with title (item 1 of argv)",
-			"-e", "end run",
-			title, body)
-	case "linux", "freebsd", "openbsd":
-		cmd = exec.Command("notify-send", "--app-name=honk", title, body)
-	default:
-		return
-	}
-	if err := cmd.Run(); err != nil {
-		slog.Warn("notify", "err", err)
-	}
+	// A click opens the most urgent PR. The actions are sorted, so it is the first.
+	postNotification(title, body, fresh[0].URL)
 }
 
 // OpenURL opens a GitHub link in the default browser.

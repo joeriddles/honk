@@ -41,6 +41,7 @@ func runTray(cfg Config) {
 func (t *tray) onReady() {
 	systray.SetTitle("🪿")
 	systray.SetTooltip("honk: PRs that wait on you")
+	initNotify()
 
 	var err error
 	if t.state, err = LoadState(); err != nil {

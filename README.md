@@ -57,6 +57,8 @@ honk polls every 2 minutes (`-interval`). It makes a sound only for an action th
 
 State, logs, and the sound files are in `~/Library/Application Support/honk/`. Delete `state.json` to hear every action again.
 
+The first time honk.app starts, macOS asks if honk can send notifications. Choose **Allow** in the prompt; a click on the banner itself does not count. If you miss the prompt, turn honk on in System Settings → Notifications. Notifications only show the honk icon and open the PR on a click when honk runs from honk.app.
+
 ## Flags
 
 | Flag | Default | |
@@ -76,7 +78,10 @@ State, logs, and the sound files are in `~/Library/Application Support/honk/`. D
 | `rules.go` | `Decide` turns a snapshot into actions. It is a pure function; `rules_test.go` covers it. |
 | `state.go` | Remembers the actions that it saw, so a restart does not honk again. |
 | `sound.go` | Embeds the honk, makes the chirp in code, and plays them with `afplay` (or `paplay`/`aplay` on Linux). |
-| `notify.go` | Posts notifications with `osascript` (or `notify-send`) and opens PR links. |
+| `notify.go` | Writes the notification text and opens PR links. |
+| `notify_darwin.go`, `notify_darwin.m` | Posts native macOS notifications from honk.app. A click opens the PR. Outside the bundle, it falls back to `osascript`. |
+| `notify_other.go` | Posts notifications with `notify-send` on Linux and BSD. |
+| `tools/icon.swift` | Draws the app icon: the goose emoji from the system font on a pond-blue squircle. `make app` runs it, so the repo holds no emoji art. |
 | `tray.go` | The menubar, built on [`fyne.io/systray`](https://github.com/fyne-io/systray). |
 
 Each poll makes three GraphQL calls and one REST call. One poll costs about 6 points. At the default interval, that is about 180 of your 5,000 points an hour. A poll takes about 10 seconds.

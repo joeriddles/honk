@@ -1,2 +1,10 @@
 honk
 honk.app/
+honk.icns
+honk.iconset/
+
+# OS
+.DS_Store
+
+# recordings
+/media
