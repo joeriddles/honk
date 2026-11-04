@@ -63,7 +63,9 @@ State, logs, and the sound files are in `~/Library/Application Support/honk/`. D
 |---|---|---|
 | `-interval` | `2m` | Time between polls. The minimum is 30s. |
 | `-stale-days` | `60` | Skip PRs with no update for this many days. `0` keeps all. |
-| `-exclude-orgs` | | Orgs to skip, comma-separated. |
+| `-orgs` | | Watch only these orgs, comma-separated. |
+| `-repos` | | Watch only these repos (`owner/name`), comma-separated. With `-orgs`, honk watches both. |
+| `-exclude-orgs` | | Orgs to skip, comma-separated. This wins over `-orgs`. |
 | `-team-honk` | `false` | Honk for team review requests too. |
 | `-check` | | Print the actions once, then exit. |
 | `-test-sound` | | Play both sounds, then exit. |

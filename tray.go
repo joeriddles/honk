@@ -137,7 +137,7 @@ func (t *tray) loop() {
 func (t *tray) poll(ctx context.Context, c *Client) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	snap, err := c.Fetch(ctx, t.cfg.ExcludeOrgs)
+	snap, err := c.Fetch(ctx, t.cfg.Scope)
 	if err != nil {
 		return err
 	}

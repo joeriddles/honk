@@ -253,15 +253,9 @@ func (g gqlPR) toPR() PR {
 	return p
 }
 
-// Fetch gets one snapshot: one GraphQL call and one REST call.
-func (c *Client) Fetch(ctx context.Context, excludeOrgs []string) (*Snapshot, error) {
-	var b strings.Builder
-	b.WriteString("is:open is:pr archived:false")
-	for _, o := range excludeOrgs {
-		b.WriteString(" -org:")
-		b.WriteString(o)
-	}
-	base := b.String()
+// Fetch gets one snapshot: three GraphQL calls and one REST call.
+func (c *Client) Fetch(ctx context.Context, scope Scope) (*Snapshot, error) {
+	base := "is:open is:pr archived:false" + scope.Query()
 
 	s := &Snapshot{}
 	for _, q := range []struct {
@@ -293,7 +287,7 @@ func (c *Client) Fetch(ctx context.Context, excludeOrgs []string) (*Snapshot, er
 	}
 
 	// A failed mentions call must not hide the review list, so only log it.
-	mentions, err := c.mentions(ctx, excludeOrgs)
+	mentions, err := c.mentions(ctx, scope)
 	if err != nil {
 		slog.Warn("fetch mentions", "err", err)
 	}
@@ -336,7 +330,7 @@ func (c *Client) graphql(ctx context.Context, query string, vars map[string]any,
 	return json.Unmarshal(resp.Data, out)
 }
 
-func (c *Client) mentions(ctx context.Context, excludeOrgs []string) ([]Mention, error) {
+func (c *Client) mentions(ctx context.Context, scope Scope) ([]Mention, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiBase+"/notifications?participating=true&per_page=50", nil)
 	if err != nil {
 		return nil, err
@@ -369,7 +363,7 @@ func (c *Client) mentions(ctx context.Context, excludeOrgs []string) ([]Mention,
 		if !t.Unread || t.Reason != "mention" || t.Subject.Type != "PullRequest" {
 			continue
 		}
-		if containsFold(excludeOrgs, t.Repository.Owner.Login) {
+		if !scope.Allows(t.Repository.FullName) {
 			continue
 		}
 		u := strings.Replace(t.Subject.URL, apiBase+"/repos/", "https://github.com/", 1)

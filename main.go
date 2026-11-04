@@ -10,19 +10,20 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
 type Config struct {
-	Interval    time.Duration
-	Opt         Options
-	ExcludeOrgs []string
+	Interval time.Duration
+	Opt      Options
+	Scope    Scope
 }
 
 func main() {
 	interval := flag.Duration("interval", 2*time.Minute, "time between polls")
 	staleDays := flag.Int("stale-days", 60, "skip PRs with no update for this many days (0 keeps all)")
+	orgs := flag.String("orgs", "", "comma-separated orgs to watch; with -repos, watch only these")
+	repos := flag.String("repos", "", "comma-separated owner/name repos to watch; with -orgs, watch only these")
 	exclude := flag.String("exclude-orgs", "", "comma-separated orgs to skip")
 	teamHonk := flag.Bool("team-honk", false, "honk for team review requests too")
 	check := flag.Bool("check", false, "print what waits on you, then exit (no menubar)")
@@ -34,11 +35,7 @@ func main() {
 	cfg := Config{
 		Interval: max(*interval, 30*time.Second),
 		Opt:      Options{StaleAfter: time.Duration(*staleDays) * 24 * time.Hour, TeamHonk: *teamHonk},
-	}
-	for o := range strings.SplitSeq(*exclude, ",") {
-		if o = strings.TrimSpace(o); o != "" {
-			cfg.ExcludeOrgs = append(cfg.ExcludeOrgs, o)
-		}
+		Scope:    Scope{Orgs: parseList(*orgs), Repos: parseList(*repos), ExcludeOrgs: parseList(*exclude)},
 	}
 
 	switch {
@@ -66,7 +63,7 @@ func runCheck(cfg Config) error {
 	if err != nil {
 		return err
 	}
-	snap, err := NewClient(token).Fetch(ctx, cfg.ExcludeOrgs)
+	snap, err := NewClient(token).Fetch(ctx, cfg.Scope)
 	if err != nil {
 		return err
 	}
