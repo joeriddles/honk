@@ -10,35 +10,20 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
-type Config struct {
-	Interval    time.Duration
-	Opt         Options
-	ExcludeOrgs []string
-}
-
 func main() {
-	interval := flag.Duration("interval", 2*time.Minute, "time between polls")
-	staleDays := flag.Int("stale-days", 60, "skip PRs with no update for this many days (0 keeps all)")
-	exclude := flag.String("exclude-orgs", "", "comma-separated orgs to skip")
-	teamHonk := flag.Bool("team-honk", false, "honk for team review requests too")
+	// All settings are in the Settings menu. These flags only help to test.
 	check := flag.Bool("check", false, "print what waits on you, then exit (no menubar)")
 	testSound := flag.Bool("test-sound", false, "play the honk and the chirp, then exit")
 	flag.Parse()
 
 	setupLog()
 
-	cfg := Config{
-		Interval: max(*interval, 30*time.Second),
-		Opt:      Options{StaleAfter: time.Duration(*staleDays) * 24 * time.Hour, TeamHonk: *teamHonk},
-	}
-	for o := range strings.SplitSeq(*exclude, ",") {
-		if o = strings.TrimSpace(o); o != "" {
-			cfg.ExcludeOrgs = append(cfg.ExcludeOrgs, o)
-		}
+	settings, err := LoadSettings()
+	if err != nil {
+		slog.Warn("load settings; use the defaults", "err", err)
 	}
 
 	switch {
@@ -52,25 +37,25 @@ func main() {
 		s.Chirp()
 		time.Sleep(400 * time.Millisecond)
 	case *check:
-		if err := runCheck(cfg); err != nil {
+		if err := runCheck(settings); err != nil {
 			fatal(err)
 		}
 	default:
-		runTray(cfg)
+		runTray(settings)
 	}
 }
 
-func runCheck(cfg Config) error {
+func runCheck(s Settings) error {
 	ctx := context.Background()
 	token, src, err := FindToken(ctx)
 	if err != nil {
 		return err
 	}
-	snap, err := NewClient(token).Fetch(ctx, cfg.ExcludeOrgs)
+	snap, err := NewClient(token).Fetch(ctx, s.ExcludeOrgs)
 	if err != nil {
 		return err
 	}
-	actions := Decide(snap, time.Now(), cfg.Opt)
+	actions := Decide(snap, time.Now(), s.Options())
 	fmt.Printf("@%s (token from %s) · %d API points left\n", snap.Me, src, snap.RateRemaining)
 	fmt.Printf("fetched: %d review requests, %d reviewed, %d yours, %d mentions\n\n",
 		len(snap.ReviewRequests), len(snap.Reviewed), len(snap.Mine), len(snap.Mentions))
@@ -80,7 +65,7 @@ func runCheck(cfg Config) error {
 	}
 	for _, a := range actions {
 		sound := "chirp"
-		if a.Honks(cfg.Opt) {
+		if a.Honks(s.Options()) {
 			sound = "HONK"
 		}
 		fmt.Printf("%-5s %s %-12s %s#%d  %s\n      %s · %s\n", sound, kindIcon[a.Kind], a.Kind, a.Repo, a.Number, a.Title, a.Reason, a.URL)

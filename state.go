@@ -11,8 +11,9 @@ import (
 
 // State lives on disk, so a restart does not honk again for old actions.
 type State struct {
-	Seen  map[string]time.Time `json:"seen"` // Action.Key -> first time seen
-	Muted bool                 `json:"muted"`
+	Seen      map[string]time.Time `json:"seen"` // Action.Key -> first time seen
+	Muted     bool                 `json:"muted"`
+	LastAlert time.Time            `json:"last_alert"` // the last honk, chirp, or reminder
 
 	path string
 }

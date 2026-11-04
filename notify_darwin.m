@@ -1,11 +1,17 @@
-// Native macOS notifications. They show the honk.app icon, and a click opens
-// the PR. They only work when honk runs from inside honk.app.
+// Native macOS notifications. They show the honk.app icon. A click opens the
+// PR, or honk's menu when the notification is about several PRs. They only
+// work when honk runs from inside honk.app.
 
 #import <AppKit/AppKit.h>
 #import <Foundation/Foundation.h>
 #import <UserNotifications/UserNotifications.h>
 
 #include "_cgo_export.h"
+
+// show_menu opens the menubar menu. fyne.io/systray defines it in
+// systray_darwin.m and runs it on the main thread. It is not public API, so a
+// new systray version can remove it; go.mod pins the version.
+extern void show_menu(void);
 
 static void honkLog(NSString *msg) { honkNotifyLog((char *)msg.UTF8String); }
 
@@ -20,7 +26,8 @@ static void honkLog(NSString *msg) { honkNotifyLog((char *)msg.UTF8String); }
   done(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionList);
 }
 
-// A click on the notification opens the PR.
+// A click on the notification opens the PR. A notification about several PRs
+// has no URL, so the click opens honk's menu, which lists them all.
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center
     didReceiveNotificationResponse:(UNNotificationResponse *)response
              withCompletionHandler:(void (^)(void))done {
@@ -30,6 +37,8 @@ static void honkLog(NSString *msg) { honkNotifyLog((char *)msg.UTF8String); }
     if (url != nil) {
       [[NSWorkspace sharedWorkspace] openURL:url];
     }
+  } else {
+    show_menu();
   }
   done();
 }

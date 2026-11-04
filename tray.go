@@ -21,20 +21,23 @@ type row struct {
 }
 
 type tray struct {
-	cfg    Config
 	state  *State
 	sounds *Sounds
 
-	mu   sync.Mutex
-	rows [rowCount]*row
+	mu       sync.Mutex
+	settings Settings
+	rows     [rowCount]*row
+	seenOrgs map[string]bool // every org seen since start, for the Skip orgs menu
+	orgsSub  *systray.MenuItem
+	orgRows  [orgSlots]*orgSlot
 
 	status  *systray.MenuItem
 	mute    *systray.MenuItem
 	refresh chan struct{}
 }
 
-func runTray(cfg Config) {
-	t := &tray{cfg: cfg, refresh: make(chan struct{}, 1)}
+func runTray(s Settings) {
+	t := &tray{settings: s, seenOrgs: map[string]bool{}, refresh: make(chan struct{}, 1)}
 	systray.Run(t.onReady, func() { slog.Info("quit") })
 }
 
@@ -71,6 +74,7 @@ func (t *tray) onReady() {
 	t.status.Disable()
 	refresh := systray.AddMenuItem("Refresh now", "Poll GitHub now")
 	t.mute = systray.AddMenuItemCheckbox("Mute", "No sounds and no notifications", t.state.Muted)
+	t.buildSettings()
 	quit := systray.AddMenuItem("Quit honk", "")
 
 	go func() {
@@ -109,8 +113,6 @@ func (t *tray) poke() {
 func (t *tray) loop() {
 	ctx := context.Background()
 	var client *Client
-	tick := time.NewTicker(t.cfg.Interval)
-	defer tick.Stop()
 	for {
 		if client == nil {
 			// Get the token on each failure, so `gh auth login` fixes a running app.
@@ -128,9 +130,12 @@ func (t *tray) loop() {
 				client = nil // a bad token is the usual cause; get a new one
 			}
 		}
+		// A new timer each time, so a change of the poll interval works at once.
+		timer := time.NewTimer(t.settingsNow().Interval())
 		select {
-		case <-tick.C:
+		case <-timer.C:
 		case <-t.refresh:
+			timer.Stop()
 		}
 	}
 }
@@ -138,35 +143,51 @@ func (t *tray) loop() {
 func (t *tray) poll(ctx context.Context, c *Client) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	snap, err := c.Fetch(ctx, t.cfg.ExcludeOrgs)
+	s := t.settingsNow()
+	snap, err := c.Fetch(ctx, s.ExcludeOrgs)
 	if err != nil {
 		return err
 	}
 	now := time.Now()
-	actions := Decide(snap, now, t.cfg.Opt)
+	actions := Decide(snap, now, s.Options())
 
 	t.mu.Lock()
+	for _, o := range snap.Orgs() {
+		t.seenOrgs[o] = true
+	}
 	fresh := t.state.Update(actions, now)
+	if t.state.LastAlert.IsZero() {
+		t.state.LastAlert = now // the first run after an upgrade does not remind at once
+	}
+	remind := len(fresh) == 0 && s.Reminder().Due(now, t.state.LastAlert, len(actions))
+	if len(fresh) > 0 || remind {
+		t.state.LastAlert = now
+	}
 	muted := t.state.Muted
 	t.mu.Unlock()
 	t.save()
 
-	slog.Info("poll", "user", snap.Me, "actions", len(actions), "new", len(fresh), "rate_left", snap.RateRemaining)
+	slog.Info("poll", "user", snap.Me, "actions", len(actions), "new", len(fresh), "remind", remind, "rate_left", snap.RateRemaining)
 	t.render(actions)
+	t.renderOrgs()
 	t.status.SetTitle(fmt.Sprintf("@%s · checked %s", snap.Me, now.Format("15:04")))
 
-	if len(fresh) > 0 && !muted {
-		t.alert(fresh)
+	switch {
+	case muted:
+	case len(fresh) > 0:
+		t.alert(fresh, false, s.Options())
+	case remind:
+		t.alert(actions, true, s.Options())
 	}
 	return nil
 }
 
-// alert makes one sound and one notification for all new actions of a poll.
+// alert makes one sound and one notification for a batch of actions.
 // A honk wins over a chirp.
-func (t *tray) alert(fresh []Action) {
+func (t *tray) alert(as []Action, reminder bool, opt Options) {
 	honk := false
-	for _, a := range fresh {
-		if a.Honks(t.cfg.Opt) {
+	for _, a := range as {
+		if a.Honks(opt) {
 			honk = true
 			break
 		}
@@ -178,7 +199,7 @@ func (t *tray) alert(fresh []Action) {
 			t.sounds.Chirp()
 		}
 	}
-	go Notify(fresh)
+	go Notify(as, reminder)
 }
 
 func (t *tray) fail(err error) {

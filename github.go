@@ -445,3 +445,22 @@ func containsFold(list []string, s string) bool {
 	}
 	return false
 }
+
+// Orgs returns the owners of every repo in the snapshot.
+func (s *Snapshot) Orgs() []string {
+	var out []string
+	add := func(repo string) {
+		if owner, _, ok := strings.Cut(repo, "/"); ok && !containsFold(out, owner) {
+			out = append(out, owner)
+		}
+	}
+	for _, set := range [][]PR{s.ReviewRequests, s.Reviewed, s.Mine} {
+		for _, p := range set {
+			add(p.Repo)
+		}
+	}
+	for _, m := range s.Mentions {
+		add(m.Repo)
+	}
+	return out
+}

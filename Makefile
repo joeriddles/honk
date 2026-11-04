@@ -2,9 +2,6 @@ APP    := honk.app
 LABEL   := dev.joeriddles.honk
 DEST    := $(HOME)/Applications
 AGENT   := $(HOME)/Library/LaunchAgents/$(LABEL).plist
-# Flags for the app when it starts at login, for example:
-#   make login ARGS="-exclude-orgs wildecare -team-honk"
-ARGS    ?=
 
 .PHONY: build test check sound app install login logout clean
 
@@ -16,7 +13,7 @@ test:
 	go test ./...
 
 check: build
-	./honk -check $(ARGS)
+	./honk -check
 
 sound: build
 	./honk -test-sound
@@ -71,7 +68,7 @@ login: install
 	  '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
 	  '<plist version="1.0"><dict>' \
 	  '<key>Label</key><string>$(LABEL)</string>' \
-	  '<key>ProgramArguments</key><array><string>$(DEST)/$(APP)/Contents/MacOS/honk</string>$(foreach a,$(ARGS),<string>$(a)</string>)</array>' \
+	  '<key>ProgramArguments</key><array><string>$(DEST)/$(APP)/Contents/MacOS/honk</string></array>' \
 	  '<key>RunAtLoad</key><true/>' \
 	  '<key>LimitLoadToSessionType</key><string>Aqua</string>' \
 	  '</dict></plist>' > $(AGENT)

@@ -15,7 +15,7 @@ make install  # build honk.app into ~/Applications
 open ~/Applications/honk.app
 ```
 
-To start honk at login, run `make login`. Add flags with `ARGS`, for example `make login ARGS="-exclude-orgs wildecare"`. To stop that, run `make logout`.
+To start honk at login, turn on **Settings → Start at login**, or run `make login`. To stop that, turn it off, or run `make logout`.
 
 ## Token
 
@@ -38,7 +38,7 @@ honk gives each PR one action at most. The first rule that matches wins.
 | 👀 review | Someone requested your review by name. |
 | 🔁 re-review | You requested changes, and the author pushed after your review. Your review still blocks the merge. |
 | 💬 mention | An unread notification @mentions you on a PR. Open the PR and the notification goes away. |
-| 👥 team review | Someone requested a review from your team. This does not honk unless you set `-team-honk`. |
+| 👥 team review | Someone requested a review from your team. This does not honk unless you turn on **Settings → Honk for team reviews**. |
 
 **Your own PR waits on you.** These chirp.
 
@@ -49,26 +49,34 @@ honk gives each PR one action at most. The first rule that matches wins.
 | 🪚 respond | A reviewer requested changes on the head commit. After you push, the turn goes back to the reviewer. |
 | 🚀 merge | The PR is approved and CI is green. |
 
-honk skips drafts, and PRs with no update for 60 days (`-stale-days`).
+honk skips drafts, and PRs with no update for 60 days (**Settings → Skip PRs idle for**).
 
 ## When it honks
 
-honk polls every 2 minutes (`-interval`). It makes a sound only for an action that it did not see before. One poll makes one sound and one notification, even when it finds many actions. A honk wins over a chirp.
+honk polls every 2 minutes (**Settings → Check GitHub every**). It makes a sound only for an action that it did not see before. One poll makes one sound and one notification, even when it finds many actions. A honk wins over a chirp.
+
+While PRs still wait on you, honk reminds you again every 2 hours. A reminder makes the same sound and says "still wait on you". By default, reminders only come Monday to Friday, from 9 AM to 6 PM local time. So the first poll after 9 AM on a workday reminds you of what waited overnight. Any honk or chirp starts the 2 hours again.
 
 State, logs, and the sound files are in `~/Library/Application Support/honk/`. Delete `state.json` to hear every action again.
 
-The first time honk.app starts, macOS asks if honk can send notifications. Choose **Allow** in the prompt; a click on the banner itself does not count. If you miss the prompt, turn honk on in System Settings → Notifications. Notifications only show the honk icon and open the PR on a click when honk runs from honk.app.
+The first time honk.app starts, macOS asks if honk can send notifications. Choose **Allow** in the prompt; a click on the banner itself does not count. If you miss the prompt, turn honk on in System Settings → Notifications. A click on a notification about one PR opens that PR. A click on a notification about several PRs opens honk's menu, which lists them all. This works only when honk runs from honk.app.
 
-## Flags
+## Settings
 
-| Flag | Default | |
+Change everything in honk's menu, under **Settings**. A change works at once. honk saves it in `~/Library/Application Support/honk/config.json`.
+
+| Setting | Default | |
 |---|---|---|
-| `-interval` | `2m` | Time between polls. The minimum is 30s. |
-| `-stale-days` | `60` | Skip PRs with no update for this many days. `0` keeps all. |
-| `-exclude-orgs` | | Orgs to skip, comma-separated. |
-| `-team-honk` | `false` | Honk for team review requests too. |
-| `-check` | | Print the actions once, then exit. |
-| `-test-sound` | | Play both sounds, then exit. |
+| Check GitHub every | 2 minutes | Time between polls. |
+| Remind me every | 2 hours | How often honk reminds you about PRs that still wait. **Never** turns reminders off. |
+| Remind on | Weekdays | The days that reminders come. Turn each day on or off. |
+| Workday starts at, Workday ends at | 9 AM, 6 PM | The hours that reminders come. Choose **Midnight** for both to get reminders all day. |
+| Skip PRs idle for | 60 days | Skip PRs with no update for this long. **Never** keeps all. |
+| Skip orgs | None | The orgs of your PRs. A check mark makes honk skip that org. |
+| Honk for team reviews | Off | Honk, and not only list, when someone asks your team for a review. |
+| Start at login | | Adds or removes the LaunchAgent that starts honk at login. |
+
+Two flags help when you test: `honk -check` prints what waits on you, then exits. `honk -test-sound` plays both sounds.
 
 ## Code
 
@@ -79,6 +87,10 @@ The first time honk.app starts, macOS asks if honk can send notifications. Choos
 | `state.go` | Remembers the actions that it saw, so a restart does not honk again. |
 | `sound.go` | Embeds the honk, makes the chirp in code, and plays them with `afplay` (or `paplay`/`aplay` on Linux). |
 | `notify.go` | Writes the notification text and opens PR links. |
+| `remind.go` | Decides when a reminder is due. `remind_test.go` covers it. |
+| `config.go` | Loads, cleans, and saves the settings in `config.json`. |
+| `settings.go` | Builds the Settings menu. |
+| `login_darwin.go` | Writes or removes the LaunchAgent for Start at login. |
 | `notify_darwin.go`, `notify_darwin.m` | Posts native macOS notifications from honk.app. A click opens the PR. Outside the bundle, it falls back to `osascript`. |
 | `notify_other.go` | Posts notifications with `notify-send` on Linux and BSD. |
 | `tools/icon.swift` | Draws the app icon: the goose emoji from the system font on a pond-blue squircle. `make app` runs it, so the repo holds no emoji art. |
